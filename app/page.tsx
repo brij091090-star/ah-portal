@@ -36,7 +36,8 @@ export default function Portal() {
   const [showRefresh, setShowRefresh] = useState(false)
   const [refreshStatus, setRefreshStatus] = useState('')
   const [lastRefresh, setLastRefresh] = useState<string | null>(null)
-  const [dataSource, setDataSource] = useState<'live' | 'seed'>('seed')
+  const [dataSource, setDataSource] = useState<'live' | 'seed' | 'cached'>('seed')
+  const [frappeEnabled, setFrappeEnabled] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const syncTimer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -59,6 +60,7 @@ export default function Portal() {
         setDecisions(dData.decisions || {})
         setKvEnabled(dData.kvConfigured || false)
         if (rData.lastRefresh) setLastRefresh(rData.lastRefresh)
+        if (rData.frappeConfigured) setFrappeEnabled(rData.frappeConfigured)
       } catch (err) {
         console.error(err)
       }
@@ -178,6 +180,31 @@ export default function Portal() {
   }
 
   // CSV refresh
+  async function handleRefreshLive() {
+    setRefreshStatus('Connecting to WizRep…')
+    try {
+      const res = await fetch('/api/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setRefreshStatus(`✓ ${data.count} tickets loaded from WizRep`)
+        const tRes = await fetch('/api/tickets')
+        const tData = await tRes.json()
+        setTickets(tData.tickets || [])
+        setDataSource('live')
+        setLastRefresh(data.refreshedAt)
+        setTimeout(() => { setShowRefresh(false); setRefreshStatus('') }, 2000)
+      } else {
+        setRefreshStatus(`Error: ${data.error}`)
+      }
+    } catch {
+      setRefreshStatus('Connection failed')
+    }
+  }
+
   async function handleRefreshFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -192,8 +219,7 @@ export default function Portal() {
       })
       const data = await res.json()
       if (data.ok) {
-        setRefreshStatus(`✓ Refreshed — ${data.count} tickets loaded`)
-        // Reload tickets
+        setRefreshStatus(`✓ ${data.count} tickets loaded from CSV`)
         const tRes = await fetch('/api/tickets')
         const tData = await tRes.json()
         setTickets(tData.tickets || [])
@@ -258,6 +284,8 @@ export default function Portal() {
             <div className="sub">
               AH Group · {tickets.length.toLocaleString()} awaiting disposition
               {dataSource === 'seed' && <span style={{ marginLeft: 6, color: 'var(--amber-text)' }}>· Seed data</span>}
+              {dataSource === 'live' && <span style={{ marginLeft: 6, color: 'var(--green-text)' }}>· Live from WizRep</span>}
+              {dataSource === 'cached' && <span style={{ marginLeft: 6, color: 'var(--text3)' }}>· Cached</span>}
               {lastRefresh && <span style={{ marginLeft: 6 }}>· Refreshed {new Date(lastRefresh).toLocaleDateString()}</span>}
             </div>
           </div>
@@ -467,10 +495,18 @@ export default function Portal() {
             <p>
               Export the latest tickets from WizRep as a CSV and upload here. The portal will automatically filter to <strong>Quote Submitted</strong> tickets for <strong>AH Group</strong> and recalculate aging.
             </p>
+            {refreshStatus && (
+              <p style={{ marginBottom: 12, color: 'var(--green-text)', fontWeight: 500 }}>{refreshStatus}</p>
+            )}
+            {frappeEnabled && (
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 12, padding: '10px' }} onClick={handleRefreshLive}>
+                <i className="ti ti-refresh" /> Fetch live from WizRep
+              </button>
+            )}
             <div className="drop-zone" onClick={() => fileInputRef.current?.click()}>
               <i className="ti ti-file-upload" style={{ display: 'block', marginBottom: 8 }} />
-              <p>{refreshStatus || 'Click to upload WizRep CSV export'}</p>
-              <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Accepts the standard Ticket export from WizRep</p>
+              <p>Or upload a WizRep CSV export</p>
+              <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Fallback if direct connection isn&apos;t available</p>
             </div>
             <input ref={fileInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleRefreshFile} />
             <div className="modal-footer">
