@@ -360,16 +360,6 @@ export default function Portal() {
         ))}
       </div>
 
-      {/* Over 120 banner */}
-      {activeTab === 'Over 120 Days' && (
-        <div className="banner">
-          <i className="ti ti-alert-triangle" />
-          <span>
-            <strong>Scrap authorization confirmed</strong> — Ethan Flack (AH Group, VP Global Operations, Mar 6 2026) confirmed the Over 120 Days segment can be scrapped. Rejecting these will add them to the WizRep export.
-          </span>
-        </div>
-      )}
-
       {/* Toolbar */}
       <div className="toolbar">
         <input
